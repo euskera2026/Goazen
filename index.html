@@ -190,6 +190,33 @@
   .dia-reveal.open{background:var(--accent-pale);color:var(--accent);border-color:var(--accent)}
   .dia-val{font-family:'Lora',serif;font-style:italic;color:var(--accent);font-size:.9rem}
   .dia-note{margin-top:.5rem;font-size:.72rem;color:var(--ink-light);font-style:italic}
+  /* Case Lab */
+  .cl-intro{background:var(--accent-pale);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1.1rem;font-size:.86rem;line-height:1.6;color:var(--ink-mid)}
+  .cl-intro strong{color:var(--ink);font-weight:500}
+  .cl-picker-label{font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-light);margin:1rem 0 .5rem}
+  .cl-noun-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.3rem}
+  .cl-noun{font-size:.8rem;padding:6px 12px;border-radius:99px;border:.5px solid var(--border);background:var(--bg-card);cursor:pointer;color:var(--ink-mid)}
+  .cl-noun.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .cl-noun .cl-type{font-family:'DM Mono',monospace;font-size:.56rem;opacity:.6;margin-left:4px}
+  .cl-stage{background:var(--bg-card);border:.5px solid var(--border);border-radius:14px;padding:1.3rem 1.1rem;margin-bottom:1rem;text-align:center}
+  .cl-stage-noun{font-family:'DM Mono',monospace;font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-light);margin-bottom:.6rem}
+  .cl-form{font-family:'Lora',serif;font-style:italic;font-size:2.1rem;color:var(--basque);min-height:52px;animation:pop .25s ease}
+  .cl-form .cl-suf{color:var(--accent);font-style:italic}
+  .cl-gloss{font-size:1rem;color:var(--ink);margin-top:.7rem}
+  .cl-casename{font-family:'DM Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-top:.3rem}
+  .cl-nor{font-family:'Lora',serif;font-style:italic;color:var(--ink-light);font-size:.85rem;margin-top:.2rem}
+  .cl-note{font-size:.8rem;color:var(--ink-mid);line-height:1.55;margin-top:.9rem;padding-top:.8rem;border-top:.5px dashed var(--border);text-align:left}
+  .cl-hi{background:var(--warn-bg);color:#7a4f12;border-radius:6px;padding:.5rem .7rem;font-size:.76rem;margin-top:.6rem;text-align:left;font-family:'DM Mono',monospace}
+  .cl-biz{margin-top:.6rem;text-align:left}
+  .cl-case-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .cl-case-btn{text-align:left;padding:8px 11px;border-radius:9px;border:.5px solid var(--border);background:var(--bg-card);cursor:pointer;transition:transform .1s}
+  .cl-case-btn:active{transform:scale(.97)}
+  .cl-case-btn.active{border-color:var(--accent);background:var(--accent-pale)}
+  .cl-case-btn .cb-nor{font-family:'Lora',serif;font-style:italic;font-size:.92rem;color:var(--basque)}
+  .cl-case-btn .cb-name{font-size:.68rem;color:var(--ink-light);margin-top:1px}
+  .cl-case-btn.active .cb-name{color:var(--accent)}
+  .cl-review{font-size:.74rem;color:var(--ink-light);font-style:italic;margin-top:1.2rem;padding:.7rem .9rem;border:1px dashed var(--border);border-radius:9px;line-height:1.5}
+
 </style>
 </head>
 <body>
@@ -203,6 +230,8 @@
   <div class="screen active" id="screen-home">
     <div class="hero"><span class="badge">Pilot · Level 1</span><h2>Goazen</h2><p>Learn Basque — properly, and beautifully. Let's go.</p></div>
     <div id="unit-list"></div>
+    <div class="sec-title">Reference tools</div>
+    <div class="card tap-card mode-card" onclick="openCaseLab()"><div class="mode-icon bgfn-describe" style="color:var(--c-describe)">⁝</div><div class="mc-body"><h3>Case Lab</h3><p>All the Basque cases in one place — pick a word, try every ending, see the meaning. 112 forms to explore.</p></div></div>
     <div class="footer-note"><strong>Beta testing:</strong> this is an early prototype. Notes on anything — wording, naturalness, what's confusing — are gold. All content is original and pending native-speaker review. <span class="feedback-link" onclick="nav('backup')">Export progress →</span></div>
   </div>
 
@@ -291,6 +320,26 @@
     </div>
     <div class="footer-note" style="margin-top:1rem"><strong>Reset:</strong> <button onclick="resetAll()" style="background:none;border:none;color:var(--c-doer);text-decoration:underline;cursor:pointer;font-size:inherit;font-family:inherit">clear everything</button> on this device.</div>
   </div>
+  <!-- CASE LAB -->
+  <div class="screen" id="screen-caselab">
+    <div class="hero"><span class="badge">Reference tool</span><h2>Case Lab</h2><p>Basque builds meaning by adding endings. Pick a word, tap a case, see what it becomes.</p></div>
+    <div class="cl-intro"><strong>How to read it:</strong> Basque has no "to / from / with / of" as separate words — they're all endings glued onto the noun. Each case answers a question: <b class="bq">NOR</b> (who/what), <b class="bq">NORK</b> (who does it), <b class="bq">NORI</b> (to whom), <b class="bq">NON</b> (where)… Tap around and watch the ending change.</div>
+    <div class="cl-picker-label">Choose a word</div>
+    <div class="cl-noun-row" id="cl-noun-row"></div>
+    <div class="cl-stage">
+      <div class="cl-stage-noun" id="cl-stage-noun"></div>
+      <div class="cl-form" id="cl-form"></div>
+      <div class="cl-gloss" id="cl-gloss"></div>
+      <div class="cl-casename" id="cl-casename"></div>
+      <div class="cl-nor" id="cl-nor"></div>
+      <div class="cl-note" id="cl-note"></div>
+      <div id="cl-extra"></div>
+    </div>
+    <div class="cl-picker-label">Tap a case</div>
+    <div class="cl-case-grid" id="cl-case-grid"></div>
+    <div class="cl-review">These forms are standard Batua (singular, definite). Local cases for people use the <b>-gan / -gana / -gandik</b> series, not the place endings. Plurals and indefinites follow different patterns — a later addition. Bizkaian variants are flagged, and the whole tool is pending native-speaker review.</div>
+  </div>
+
 </div>
 <script>
 /* ============ GOAZEN — LEVEL 1 (Units 1–5) · original content ============ */
@@ -1393,6 +1442,150 @@ const PHASES_BY_UNIT={
 ]
 };
 
+/* ============ CASE LAB — standalone declension reference ============ */
+/* Batua singular-definite forms. Animate local cases use -gan/-gana/-gandik. */
+/* Every form here is standard Batua; Bizkaian variants flagged with biz. Native review pending. */
+
+const CASES=[
+ {id:"abs", nor:"NOR", name:"Absolutive", gloss:"the subject (of 'to be'), or the object",
+  suf:"-a / -ak", ex:"etxea", exen:"the house (as subject/object)",
+  note:"The base 'dictionary + the' form. Subject of intransitive verbs (etorri da), and the object of transitive ones.",
+  color:"article"},
+ {id:"erg", nor:"NORK", name:"Ergative", gloss:"the DOER of an action",
+  suf:"-ak / -ek", ex:"etxeak", exen:"the house (as doer)",
+  note:"Marks the subject of a transitive verb — the one doing something to an object. Singular -ak, plural -ek. This is Basque's signature case.",
+  color:"doer"},
+ {id:"dat", nor:"NORI", name:"Dative", gloss:"to / for someone (indirect object)",
+  suf:"-ari / -ei", ex:"lagunari", exen:"to the friend",
+  note:"The recipient — 'to whom'. An epenthetic -r- appears after a vowel (laguna → lagunari).",
+  color:"person"},
+ {id:"gen", nor:"NOREN", name:"Genitive (possessive)", gloss:"whose — belonging to",
+  suf:"-aren / -en", ex:"lagunaren", exen:"the friend's",
+  note:"Possession: lagunaren etxea = the friend's house.",
+  color:"person"},
+ {id:"ine", nor:"NON", name:"Inessive", gloss:"in / at / on (a place)",
+  suf:"-an / -ean", ex:"etxean", exen:"in the house",
+  note:"Static location. After a consonant an -e- is slipped in: oin → oinean (in the foot). For people it's -gan (see note below).",
+  color:"describe"},
+ {id:"all", nor:"NORA", name:"Allative", gloss:"to / towards (a place)",
+  suf:"-ra / -era", ex:"etxera", exen:"to the house",
+  note:"Direction towards. After a consonant: -era. For people, -gana (lagunarengana = to the friend).",
+  color:"describe"},
+ {id:"abl", nor:"NONDIK", name:"Ablative", gloss:"from / out of (a place)",
+  suf:"-tik / -etik", ex:"etxetik", exen:"from the house",
+  note:"Source or origin. After a consonant: -etik. For people, -gandik (lagunarengandik = from the friend).",
+  color:"describe"},
+ {id:"des", nor:"NORAKO", name:"Destinative", gloss:"for / destined for (a place/purpose)",
+  suf:"-rako / -erako", ex:"etxerako", exen:"for the house",
+  note:"Purpose or destination — 'for'. Built on the allative.",
+  color:"describe"},
+ {id:"com", nor:"NOREKIN", name:"Comitative", gloss:"with (someone/something)",
+  suf:"-arekin / -ekin", ex:"lagunarekin", exen:"with the friend",
+  note:"Accompaniment — 'with'. Western dialects often use -gaz instead.",
+  color:"quant", biz:"Biz · -gaz (lagunagaz)"},
+ {id:"ins", nor:"NORTAZ / ZERTAZ", name:"Instrumental", gloss:"by / about / by means of",
+  suf:"-az / -ez", ex:"autoz", exen:"by car",
+  note:"Means or topic — 'by', 'about'. Often the article -a drops: auto(a) → autoz.",
+  color:"quant"},
+ {id:"ben", nor:"NORENTZAT", name:"Benefactive", gloss:"for (someone's benefit)",
+  suf:"-arentzat / -entzat", ex:"lagunarentzat", exen:"for the friend",
+  note:"'For the benefit of' a person — distinct from the destinative -rako, which is for places/purposes.",
+  color:"person"},
+ {id:"cau", nor:"ZERGATIK", name:"Causal / motivative", gloss:"because of / for the sake of",
+  suf:"-arengatik / -engatik", ex:"lagunarengatik", exen:"because of the friend",
+  note:"Cause or reason — 'because of'.",
+  color:"gram"},
+ {id:"par", nor:"-", name:"Partitive", gloss:"any / no (in questions & negatives)",
+  suf:"-rik / -ik", ex:"etxerik", exen:"any house",
+  note:"Replaces the article in negatives and questions: ez dago etxerik = there's no house. -rik after a vowel, -ik after a consonant.",
+  color:"quant"},
+ {id:"pro", nor:"NORTZAT / ZERTZAT", name:"Prolative", gloss:"as / for (taken as)",
+  suf:"-tzat", ex:"lelotzat", exen:"as a fool",
+  note:"'Taken as / regarded as' — hartu zaitut lelotzat = I took you for a fool.",
+  color:"gram"}
+];
+
+/* Nouns to decline. type: inan (thing) or anim (person). stem end matters for euphonics. */
+/* Forms are singular-definite Batua. Animate local cases use the -gan series. */
+const NOUNS=[
+ {stem:"etxe", the:"etxea", en:"house", type:"inan",
+  f:{abs:"etxea",erg:"etxeak",dat:"etxeari",gen:"etxearen",ine:"etxean",all:"etxera",abl:"etxetik",des:"etxerako",com:"etxearekin",ins:"etxez",ben:"etxearentzat",cau:"etxearengatik",par:"etxerik",pro:"etxetzat"}},
+ {stem:"lagun", the:"laguna", en:"friend", type:"anim",
+  f:{abs:"laguna",erg:"lagunak",dat:"lagunari",gen:"lagunaren",ine:"lagunarengan",all:"lagunarengana",abl:"lagunarengandik",des:"lagunarentzako",com:"lagunarekin",ins:"lagunaz",ben:"lagunarentzat",cau:"lagunarengatik",par:"lagunik",pro:"laguntzat"},
+  biz:{com:"lagunagaz"}},
+ {stem:"taberna", the:"taberna", en:"bar", type:"inan",
+  f:{abs:"taberna",erg:"tabernak",dat:"tabernari",gen:"tabernaren",ine:"tabernan",all:"tabernara",abl:"tabernatik",des:"tabernarako",com:"tabernarekin",ins:"tabernaz",ben:"tabernarentzat",cau:"tabernarengatik",par:"tabernarik",pro:"tabernatzat"}},
+ {stem:"mendi", the:"mendia", en:"mountain", type:"inan",
+  f:{abs:"mendia",erg:"mendiak",dat:"mendiari",gen:"mendiaren",ine:"mendian",all:"mendira",abl:"menditik",des:"mendirako",com:"mendiarekin",ins:"mendiz",ben:"mendiarentzat",cau:"mendiarengatik",par:"mendirik",pro:"menditzat"}},
+ {stem:"hiri", the:"hiria", en:"city", type:"inan",
+  f:{abs:"hiria",erg:"hiriak",dat:"hiriari",gen:"hiriaren",ine:"hirian",all:"hirira",abl:"hiritik",des:"hirirako",com:"hiriarekin",ins:"hiriz",ben:"hiriarentzat",cau:"hiriarengatik",par:"hiririk",pro:"hiritzat"}},
+ {stem:"oin", the:"oina", en:"foot", type:"inan",
+  f:{abs:"oina",erg:"oinak",dat:"oinari",gen:"oinaren",ine:"oinean",all:"oinera",abl:"oinetik",des:"oinerako",com:"oinarekin",ins:"oinez",ben:"oinarentzat",cau:"oinarengatik",par:"oinik",pro:"ointzat"},
+  hi:{ine:"consonant stem → -e- slips in: oin+ean",all:"oin+era",abl:"oin+etik"}},
+ {stem:"mutil", the:"mutila", en:"boy", type:"anim",
+  f:{abs:"mutila",erg:"mutilak",dat:"mutilari",gen:"mutilaren",ine:"mutilarengan",all:"mutilarengana",abl:"mutilarengandik",des:"mutilarentzako",com:"mutilarekin",ins:"mutilaz",ben:"mutilarentzat",cau:"mutilarengatik",par:"mutilik",pro:"mutiltzat"},
+  biz:{com:"mutilagaz"}},
+ {stem:"Bilbo", the:"Bilbo", en:"Bilbao (place name)", type:"place",
+  f:{abs:"Bilbo",erg:"Bilbok",dat:"Bilbori",gen:"Bilboren",ine:"Bilbon",all:"Bilbora",abl:"Bilbotik",des:"Bilborako",com:"Bilborekin",ins:"Bilboz",ben:"Bilborentzat",cau:"Bilborengatik",par:"Bilborik",pro:"Bilbotzat"},
+  hi:{abs:"proper names take no article; case adds straight onto the name"}}
+];
+
+/* ============ CASE LAB logic ============ */
+let clNoun=0, clCase="abs";
+function renderCaseNouns(){
+  const row=document.getElementById('cl-noun-row');row.innerHTML='';
+  NOUNS.forEach((n,i)=>{
+    const b=document.createElement('button');b.className='cl-noun'+(i===clNoun?' active':'');
+    const typeLabel=n.type==='anim'?'person':(n.type==='place'?'place':'thing');
+    b.innerHTML=n.stem+'<span class="cl-type">'+typeLabel+'</span>';
+    b.onclick=()=>{clNoun=i;renderCaseNouns();renderCaseForm();};
+    row.appendChild(b);
+  });
+}
+function renderCaseGrid(){
+  const grid=document.getElementById('cl-case-grid');grid.innerHTML='';
+  CASES.forEach(c=>{
+    const b=document.createElement('button');b.className='cl-case-btn'+(c.id===clCase?' active':'');
+    b.innerHTML='<div class="cb-nor">'+(c.nor==='-'?'&nbsp;':c.nor)+'</div><div class="cb-name">'+c.name+'</div>';
+    b.onclick=()=>{clCase=c.id;renderCaseGrid();renderCaseForm();};
+    grid.appendChild(b);
+  });
+}
+function renderCaseForm(){
+  const n=NOUNS[clNoun];const c=CASES.find(x=>x.id===clCase);
+  const form=n.f[clCase]||'—';
+  // highlight the ending: find common prefix with the bare stem
+  let disp=form;
+  const stem=n.stem;
+  if(form.toLowerCase().startsWith(stem.toLowerCase())&&form.length>stem.length){
+    disp=form.slice(0,stem.length)+'<span class="cl-suf">'+form.slice(stem.length)+'</span>';
+  }
+  document.getElementById('cl-stage-noun').textContent=n.stem+' — "'+n.en+'"';
+  document.getElementById('cl-form').innerHTML=disp;
+  document.getElementById('cl-gloss').textContent='“'+glossFor(n,c)+'”';
+  document.getElementById('cl-casename').textContent=c.name+'  ·  '+c.suf;
+  document.getElementById('cl-nor').textContent=c.nor==='-'?'':c.nor+'?';
+  document.getElementById('cl-note').textContent=c.note;
+  // extras: euphonic hint + bizkaian
+  let extra='';
+  if(n.hi&&n.hi[clCase])extra+='<div class="cl-hi">↳ '+n.hi[clCase]+'</div>';
+  const biz=(n.biz&&n.biz[clCase])?('Biz · '+n.biz[clCase]):(c.biz||'');
+  if(biz)extra+='<div class="cl-biz"><span class="dia-tag"><span class="dia-flag">dialect</span>'+biz+'</span></div>';
+  document.getElementById('cl-extra').innerHTML=extra;
+}
+function glossFor(n,c){
+  // build a natural English gloss per case using the noun's English word
+  const w=n.en;
+  const the='the '+w;
+  const map={
+   abs:the, erg:the+' (as doer)', dat:'to '+the, gen:the+"'s", ine:(n.type==='anim'?'in '+the:'in '+the),
+   all:'to '+the, abl:'from '+the, des:'for '+the, com:'with '+the, ins:(w==='car'?'by car':'by/about '+the),
+   ben:'for '+the, cau:'because of '+the, par:'any '+w, pro:'as a '+w
+  };
+  return map[c.id]||the;
+}
+function openCaseLab(){activeUnit=activeUnit;renderCaseNouns();renderCaseGrid();renderCaseForm();nav('caselab');}
+
 /* ============ STORAGE (per-unit progress) ============ */
 const STORE_KEY='goazen_l1';
 let mem={hooks:{},status:{},best:{},phasesDone:{},fcDir:'produce',showDialect:false};
@@ -1414,8 +1607,8 @@ function revealDia(btn){const val=btn.parentElement.querySelector('.dia-val');co
 function unitHasDialect(){return !!U().dialect;}
 
 /* ============ NAV ============ */
-const titles={home:'<em>Goazen</em> · Basque',unit:'',phases:'Lessons',phase:'Lesson',vocab:'Vocabulary',tools:'Grammar tools',flashcards:'Flashcards',match:'Match-up',speed:'Speed recall',backup:'Backup'};
-const backMap={unit:'home',phases:'unit',phase:'phases',vocab:'unit',tools:'unit',flashcards:'vocab',match:'vocab',speed:'vocab',backup:'home'};
+const titles={home:'<em>Goazen</em> · Basque',unit:'',phases:'Lessons',phase:'Lesson',vocab:'Vocabulary',tools:'Grammar tools',flashcards:'Flashcards',match:'Match-up',speed:'Speed recall',backup:'Backup',caselab:'Case Lab'};
+const backMap={unit:'home',phases:'unit',phase:'phases',vocab:'unit',tools:'unit',flashcards:'vocab',match:'vocab',speed:'vocab',backup:'home',caselab:'home'};
 let curScreen='home';
 function nav(s){
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
