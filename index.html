@@ -1,18 +1,21 @@
 <!--
-  STUDY APP TEMPLATE — read this comment block first.
+  STUDY APP TEMPLATE v3 — memorisation-first.
 
-  This is a stripped-down, working skeleton of a language-study app: home
-  screen -> levels -> units -> (Dialogue / Vocabulary / Grammar / Quiz) tabs
-  -> a 5-question quiz per unit, with progress saved in the browser.
+  Home -> Levels -> Units. Each unit is a hub of study modes, only showing
+  the ones you give it data for:
+    • Flashcards  — flip cards, EN->target / target->EN toggle, a persistent
+                    "still learning / got it" rating, and your own editable
+                    memory hooks. THIS is the core memorisation tool.
+    • Match       — tap-to-pair game, timed, keeps your best time.
+    • Speed       — timed multiple-choice recall, with a streak counter.
+    • Dialogue / Grammar / Quiz — optional, appear only if the unit has them.
+  Plus an optional Build Lab (piece-by-piece word assembly) reached from home.
+  Progress = the share of a unit's vocab you've marked "got it".
 
-  It ships with ONE fully-worked sample unit (basic Spanish greetings) so
-  you can see the exact data shape. Everything you need to change is in
-  the LEVELS array near the bottom of the script section, marked clearly.
-
-  If you're handing this file to Claude along with your own textbook
-  material, say: "Follow this file's structure exactly. Replace the
-  sample LEVELS data with units built from the material I'm giving you,
-  keeping the same schema for units, vocab, grammar cards and quizzes."
+  Everything you edit is the LEVELS array (and BUILDPOOL) near the foot of the
+  script. The engine above it is generic. Blocks you can delete cleanly are
+  marked: "BUILD LAB — START/END". Progress saves per-device (localStorage)
+  with an export/import code.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -26,7 +29,9 @@
     --bg:#F2F4F0; --bg-card:#FBFCF9; --ink:#15201D; --ink-mid:#48564F; --ink-light:#8B978F;
     --accent:#2E7D5B; --accent-pale:#DFEEE6; --border:#D6DED7;
     --lang:#1F4A3A; --success:#2E7D5B; --success-bg:#E3F1E9; --warn:#B5762A; --warn-bg:#F4E9D6;
-    --c-l1:#2E7D5B; --c-l1-bg:#DFEEE6; --err:#C0504A;
+    --c-l1:#2E7D5B; --c-l1-bg:#DFEEE6; --c-l2:#2F6B8A; --c-l2-bg:#DEECF2;
+    --c-l3:#7E54A3; --c-l3-bg:#ECE3F4; --c-l4:#C0504A; --c-l4-bg:#F6E3E1;
+    --c-lab:#48794F; --c-lab-bg:#E1EFE2; --err:#C0504A;
     --serif:Georgia,'Times New Roman',serif;
     --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
     --mono:'SF Mono',SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
@@ -42,15 +47,17 @@
   .top.has-back .back{display:flex}
   .crumb{font-size:.82rem;color:var(--ink-light);letter-spacing:.02em}
   .wordmark{font-family:var(--serif);font-style:italic;font-weight:700;color:var(--lang);font-size:1.05rem;margin-left:auto}
-  .hero{padding:1.6rem 0 1.3rem}
+  .hero{padding:1.5rem 0 1.2rem}
   .hero h1,.hero h2{font-family:var(--serif);font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:1.12}
   .hero h1{font-size:2.5rem}.hero h2{font-size:1.8rem}
   .hero p{color:var(--ink-mid);margin-top:.5rem;max-width:46ch}
   .badge{display:inline-block;font-size:.68rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);background:var(--accent-pale);border-radius:20px;padding:.28rem .8rem;margin-bottom:.8rem}
+  .flash{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;margin:1.1rem 0 .2rem;font-family:var(--serif);font-size:1.5rem;min-height:2.4rem;transition:opacity .45s ease}
+  .flash.out{opacity:0}
+  .flash .fw{font-weight:700;color:var(--lang);font-style:italic}.flash .fs{color:var(--ink-light);font-size:1rem}.flash .fg{color:var(--accent);font-weight:600}
   .card{background:var(--bg-card);border:.5px solid var(--border);border-radius:16px;padding:1.15rem 1.2rem;margin-bottom:.85rem;box-shadow:0 1px 3px rgba(21,32,29,.03)}
-  .tap-card{cursor:pointer;transition:transform .1s ease,border-color .15s ease;text-align:left;width:100%;display:block}
-  .tap-card:hover{border-color:var(--accent)}
-  .tap-card:active{transform:scale(.985)}
+  .tap-card{cursor:pointer;transition:transform .1s,border-color .15s;text-align:left;width:100%;display:block}
+  .tap-card:hover{border-color:var(--accent)}.tap-card:active{transform:scale(.985)}
   .mode-card{display:flex;gap:14px;align-items:flex-start}
   .mode-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.3rem;flex-shrink:0;font-style:italic}
   .mc-body h3{font-size:1.05rem;font-weight:650;margin-bottom:.15rem}
@@ -58,55 +65,86 @@
   .mc-meta{font-size:.72rem;color:var(--ink-light);margin-top:.45rem;letter-spacing:.03em}
   .lv-card{display:flex;gap:14px;align-items:center}
   .lv-tag{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.05rem;flex-shrink:0}
-  .lv-body{flex:1;min-width:0}
-  .lv-body h3{font-size:1.02rem;font-weight:650}
-  .lv-body p{font-size:.83rem;color:var(--ink-mid);margin-top:.15rem}
+  .lv-body{flex:1;min-width:0}.lv-body h3{font-size:1.02rem;font-weight:650}.lv-body p{font-size:.83rem;color:var(--ink-mid);margin-top:.15rem}
   .prog{height:5px;background:var(--border);border-radius:3px;margin-top:.55rem;overflow:hidden}
-  .prog>i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .4s ease}
+  .prog>i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
   .lv-pct{font-size:.72rem;color:var(--ink-light);margin-top:.3rem}
   .u-card{display:flex;gap:12px;align-items:center}
   .u-num{font-family:var(--mono);font-size:.78rem;color:var(--ink-light);width:26px;flex-shrink:0}
-  .u-body{flex:1;min-width:0}
-  .u-body h3{font-size:.98rem;font-weight:650}
-  .u-body p{font-size:.82rem;color:var(--ink-mid)}
+  .u-body{flex:1;min-width:0}.u-body h3{font-size:.98rem;font-weight:650}.u-body p{font-size:.82rem;color:var(--ink-mid)}
   .u-done{font-size:.72rem;color:var(--success);background:var(--success-bg);border-radius:12px;padding:.15rem .55rem;flex-shrink:0}
   .u-todo{font-size:.72rem;color:var(--ink-light);flex-shrink:0}
-  .ph-tabs{display:flex;gap:6px;margin:1rem 0 1.2rem;flex-wrap:wrap}
-  .ph-tab{font-size:.84rem;padding:.5rem .95rem;border:.5px solid var(--border);border-radius:22px;background:var(--bg-card);color:var(--ink-mid);transition:all .15s}
-  .ph-tab.on{background:var(--ink);color:var(--bg-card);border-color:var(--ink)}
-  .ph-tab .tick{color:var(--success);margin-left:4px}
-  .ph-tab.on .tick{color:#9fd6bd}
+  .sec-title{font-size:.72rem;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-light);margin:1.4rem 0 .7rem}
+  /* flashcards */
+  .dir-toggle{display:inline-flex;background:var(--bg-card);border:.5px solid var(--border);border-radius:22px;padding:3px;margin-bottom:1rem}
+  .dir-opt{font-size:.82rem;padding:.4rem .9rem;border-radius:20px;color:var(--ink-mid)}
+  .dir-opt.active{background:var(--ink);color:var(--bg-card)}
+  .fc-sectionbar{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
+  .sec-chip{font-size:.78rem;padding:.32rem .8rem;border:.5px solid var(--border);border-radius:18px;background:var(--bg-card);color:var(--ink-mid)}
+  .sec-chip.on{background:var(--accent-pale);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .fc-stage{perspective:1200px;margin:.3rem 0 .8rem}
+  .fc-card{position:relative;width:100%;min-height:200px;cursor:pointer;transition:transform .5s;transform-style:preserve-3d}
+  .fc-card.flipped{transform:rotateY(180deg)}
+  .fc-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--bg-card);border:.5px solid var(--border);border-radius:18px;padding:1.6rem 1.3rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:0 2px 8px rgba(21,32,29,.05)}
+  .fc-back{transform:rotateY(180deg)}
+  .fc-word{font-family:var(--serif);font-size:2rem;color:var(--lang);font-weight:700}
+  .fc-en{font-size:1.5rem;color:var(--ink)}
+  .fc-tap{position:absolute;bottom:.9rem;left:0;right:0;font-size:.72rem;color:var(--ink-light)}
+  .fc-status{position:absolute;top:.85rem;right:1rem;font-size:.68rem}
+  .st-known{color:var(--success)}.st-learning{color:var(--warn)}
+  .fc-hook{margin-top:.9rem;font-size:.86rem;color:var(--ink-mid);max-width:38ch}
+  .hook-tag{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.1rem .45rem;border-radius:10px;margin-right:.4rem;vertical-align:middle}
+  .tag-hook{background:var(--accent-pale);color:var(--accent)}.tag-mine{background:var(--warn-bg);color:var(--warn)}
+  .note-tag{display:inline-block;margin-top:.6rem;font-size:.78rem;color:var(--ink-mid);background:var(--warn-bg);border-radius:10px;padding:.3rem .6rem}
+  .hook-edit{width:100%;border:.5px dashed var(--border);border-radius:12px;padding:.6rem .8rem;font-family:var(--sans);font-size:.84rem;background:var(--bg-card);color:var(--ink);resize:none;margin-top:.2rem}
+  .fc-controls{display:flex;gap:.6rem;justify-content:center;margin-top:.7rem}
+  .fc-btn{padding:.6rem 1.3rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg-card);font-size:.9rem;font-weight:600;color:var(--warn)}
+  .fc-btn.known{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .fc-nav{display:flex;align-items:center;justify-content:space-between;margin-top:1rem;color:var(--ink-mid);font-size:.88rem}
+  .fc-nav button{padding:.4rem .6rem}
+  #fc-counter{font-family:var(--mono);font-size:.78rem;color:var(--ink-light)}
+  .fc-progtext{text-align:center;font-size:.76rem;color:var(--ink-light);margin-top:.5rem}
+  /* games */
+  .game-card{background:var(--bg-card);border:.5px solid var(--border);border-radius:16px;padding:1.3rem 1.2rem}
+  .game-head{display:flex;justify-content:space-between;font-size:.8rem;color:var(--ink-light);margin-bottom:1rem;font-family:var(--mono)}
+  .match-grid{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
+  .match-tile{padding:.9rem .6rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg);text-align:center;font-size:.95rem;transition:all .12s;min-height:52px;display:flex;align-items:center;justify-content:center}
+  .match-tile.eu{font-family:var(--serif);color:var(--lang)}
+  .match-tile.sel{border-color:var(--accent);background:var(--accent-pale)}
+  .match-tile.done{opacity:.25;pointer-events:none}
+  .match-tile.wrong{border-color:var(--err);background:#F9ECEA;animation:shake .3s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .sp-word{font-family:var(--serif);font-size:2rem;color:var(--lang);text-align:center;font-weight:700;margin:1rem 0 1.3rem}
+  .sp-options{display:grid;gap:.55rem}
+  .sp-opt{padding:.8rem 1rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg);font-size:1rem}
+  .sp-opt.correct{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:650}
+  .sp-opt.wrong{background:#F9ECEA;border-color:var(--err);color:var(--err)}
+  .game-done{text-align:center;padding:1rem 0}
+  .game-big{font-size:2.4rem;font-weight:800;color:var(--accent);font-family:var(--serif)}
+  /* dialogue / grammar / quiz */
   .dlg-line{display:block;width:100%;text-align:left;padding:.75rem .95rem;border:.5px solid var(--border);border-radius:14px;background:var(--bg-card);margin-bottom:.5rem;cursor:pointer}
   .dlg-s{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
   .dlg-bq{font-family:var(--serif);font-size:1.06rem;color:var(--lang);margin-top:.1rem}
   .dlg-en{font-size:.86rem;color:var(--ink-mid);margin-top:.25rem;display:none}
   .dlg-line.open .dlg-en{display:block}
   .dlg-tools{display:flex;gap:.6rem;margin:.4rem 0 1rem}
-  .vb-row{display:flex;width:100%;text-align:left;align-items:baseline;gap:12px;padding:.6rem .9rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg-card);margin-bottom:.45rem;cursor:pointer}
-  .vb-bq{font-family:var(--serif);font-size:1.02rem;color:var(--lang);flex:1}
-  .vb-en{font-size:.86rem;color:var(--ink-mid);opacity:0;transition:opacity .15s}
-  .vb-row.open .vb-en{opacity:1}
   .g-card{background:var(--bg-card);border:.5px solid var(--border);border-radius:16px;padding:1.15rem 1.2rem;margin-bottom:.9rem}
   .g-card h4{font-size:.98rem;font-weight:700;margin-bottom:.45rem}
-  .g-card p{font-size:.89rem;color:var(--ink-mid);margin-bottom:.55rem}
-  .g-card p b{font-family:var(--serif);color:var(--lang)}
+  .g-card p{font-size:.89rem;color:var(--ink-mid);margin-bottom:.55rem}.g-card p b{font-family:var(--serif);color:var(--lang)}
   table.g-tb{width:100%;border-collapse:collapse;margin:.5rem 0 .7rem;font-size:.88rem}
   .g-tb th{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-light);text-align:left;padding:.3rem .55rem;border-bottom:1px solid var(--border);font-weight:650}
   .g-tb td{padding:.34rem .55rem;border-bottom:.5px solid var(--border)}
-  .g-tb td.f{font-family:var(--serif);color:var(--lang)}
   .g-ex{border-left:2.5px solid var(--accent-pale);padding:.15rem 0 .15rem .85rem;margin:.4rem 0}
-  .g-ex .bq{font-family:var(--serif);color:var(--lang);font-size:.98rem;display:block}
-  .g-ex .en{font-size:.82rem;color:var(--ink-light)}
+  .g-ex .bq{font-family:var(--serif);color:var(--lang);font-size:.98rem;display:block}.g-ex .en{font-size:.82rem;color:var(--ink-light)}
   .qz-card{background:var(--bg-card);border:.5px solid var(--border);border-radius:16px;padding:1.4rem 1.2rem;text-align:center}
   .qz-kick{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-light)}
   .qz-q{font-size:1.12rem;font-weight:650;margin:.5rem 0 1.1rem;line-height:1.4}
   .qz-opts{display:flex;flex-direction:column;gap:.55rem;max-width:420px;margin:0 auto}
-  .qz-opt{padding:.7rem 1rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg);font-family:var(--serif);font-size:1rem;color:var(--ink);transition:all .12s}
+  .qz-opt{padding:.7rem 1rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg);font-family:var(--serif);font-size:1rem;color:var(--ink)}
   .qz-opt.good{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:650}
   .qz-opt.bad{background:#F9ECEA;border-color:var(--err);color:var(--err);animation:shake .32s}
   .qz-opt:disabled{cursor:default;opacity:.85}
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-  .qz-why{font-size:.85rem;color:var(--ink-mid);margin-top:.9rem;max-width:44ch;margin-left:auto;margin-right:auto}
+  .qz-why{font-size:.85rem;color:var(--ink-mid);margin-top:.9rem;max-width:44ch;margin-inline:auto}
   .qz-score{font-size:.8rem;color:var(--ink-light);margin-bottom:.6rem;font-family:var(--mono)}
   .qz-big{font-size:2.6rem;font-weight:800;color:var(--accent);font-family:var(--serif)}
   .pn-btn{display:inline-block;padding:.6rem 1.35rem;border-radius:12px;border:.5px solid var(--border);background:var(--bg-card);font-size:.9rem;font-weight:600;color:var(--ink-mid);transition:all .13s}
@@ -118,51 +156,155 @@
   textarea.io{width:100%;min-height:130px;border:.5px solid var(--border);border-radius:12px;padding:.8rem;font-family:var(--mono);font-size:.75rem;background:var(--bg-card);color:var(--ink);resize:vertical}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg-card);font-size:.84rem;padding:.6rem 1.2rem;border-radius:24px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
   .toast.show{opacity:1}
-  .screen{display:none;animation:fadeIn .22s ease}
+  .screen{display:none;animation:fadeIn .22s}
   .screen.active{display:block}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  /* BUILD LAB — START (CSS) */
+  .clb-head{display:flex;align-items:center;gap:12px;margin:.2rem 0 1.1rem}
+  .clb-score{font-size:.82rem;color:var(--ink-light);white-space:nowrap}
+  .clb-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+  .clb-track>i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+  .clb-card{background:var(--bg-card);border:.5px solid var(--border);border-radius:16px;padding:1.5rem 1.2rem;text-align:center}
+  .clb-kick{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-light)}
+  .clb-en{font-size:1.35rem;font-weight:650;color:var(--ink);margin:.4rem 0 .15rem}
+  .clb-hint{font-size:.76rem;color:var(--ink-light);margin-bottom:1.2rem}
+  .clb-wb{display:flex;align-items:center;justify-content:center;gap:.45rem;margin:.3rem 0 1.3rem;flex-wrap:wrap}
+  .clb-root{font-family:var(--serif);font-style:italic;font-size:1.5rem;color:var(--ink)}
+  .clb-op{color:var(--ink-light);font-size:1.1rem}
+  .clb-slot{min-width:60px;padding:.2rem .7rem;border:1.5px dashed var(--border);border-radius:10px;color:var(--ink-light);font-family:var(--serif);font-style:italic;font-size:1.3rem}
+  .clb-chip{font-family:var(--serif);font-style:italic;font-size:1.3rem;color:var(--accent);cursor:pointer;border-bottom:1.5px solid var(--accent-pale);padding-bottom:1px}
+  .clb-chip:hover{opacity:.55}
+  .clb-form-inline{font-family:var(--serif);font-weight:700;font-size:1.38rem;color:var(--accent)}
+  .clb-opts{display:flex;gap:.55rem;justify-content:center;flex-wrap:wrap;margin-bottom:.4rem}
+  .clb-opt{font-family:var(--serif);font-style:italic;font-size:1.12rem;padding:.55rem 1.1rem;border:.5px solid var(--border);border-radius:12px;background:var(--bg-card);color:var(--ink)}
+  .clb-opt.used{opacity:.28}
+  .clb-controls{display:flex;gap:.6rem;justify-content:center;margin-top:1.1rem}
+  .clb-wb.wrong{animation:shake .36s}
+  .clb-reveal{margin-top:.7rem;padding-top:1.1rem;border-top:.5px solid var(--border)}
+  .clb-parts{font-size:.92rem;color:var(--ink-light);font-family:var(--serif)}
+  .clb-qw{display:inline-block;margin-left:.55rem;font-size:.78rem;color:var(--warn);font-weight:700}
+  .clb-hook{font-size:.84rem;color:var(--ink-mid);max-width:42ch;margin:.55rem auto .1rem}
+  .clb-big{font-size:2.6rem;font-weight:700;color:var(--accent);font-family:var(--serif)}
+  .cl-intro{background:var(--warn-bg);border-left:3px solid var(--warn);border-radius:0 12px 12px 0;padding:.85rem 1rem;font-size:.87rem;color:var(--ink-mid);margin-bottom:1.2rem}
+  /* BUILD LAB — END (CSS) */
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top" id="topbar">
     <button class="back" id="btn-back" onclick="goBack()">&#8592; <span id="back-label">Back</span></button>
-    <span class="crumb" id="crumb"></span>
-    <span class="wordmark">study</span>
+    <span class="crumb" id="crumb"></span><span class="wordmark">study</span>
   </div>
-
+  <!-- HOME -->
   <div class="screen active" id="screen-home">
     <div class="hero">
       <span class="badge">Your course name here</span>
       <h1>Study</h1>
-      <p>Replace this tagline with a one-line description of what you're learning and why.</p>
+      <div class="flash" id="flash" aria-hidden="true"></div>
+      <p>Replace this tagline with a one-line description of what you're learning.</p>
     </div>
     <button class="card tap-card mode-card" onclick="nav('levels')">
       <div class="mode-icon" style="background:var(--c-l1-bg);color:var(--c-l1)">A</div>
-      <div class="mc-body"><h3>Levels</h3><p>Replace with a short description of your course structure.</p><div class="mc-meta" id="home-prog"></div></div>
+      <div class="mc-body"><h3>Levels</h3><p>The course. Pick a unit, then drill it: flashcards, games, and lessons.</p><div class="mc-meta" id="home-prog"></div></div>
     </button>
-    <div class="footer-note">Original content, own vocabulary and examples built from my own material. <span class="lnk" onclick="nav('backup')">Export / import progress &#8594;</span></div>
+    <!-- BUILD LAB — START (home card) -->
+    <button class="card tap-card mode-card" onclick="openBuildLab()">
+      <div class="mode-icon" style="background:var(--c-lab-bg);color:var(--c-lab);font-size:1.05rem">&#8285;</div>
+      <div class="mc-body"><h3>Build Lab</h3><p>Assemble words piece by piece — root, then ending, each with a one-line hook.</p></div>
+    </button>
+    <!-- BUILD LAB — END (home card) -->
+    <div class="footer-note">Original content, own vocabulary and examples. <span class="lnk" onclick="nav('backup')">Export / import progress &#8594;</span></div>
   </div>
 
+  <!-- LEVELS -->
   <div class="screen" id="screen-levels">
-    <div class="hero"><h2>Levels</h2><p>Replace with an intro to how your levels are organised.</p></div>
+    <div class="hero"><h2>Levels</h2><p>Work through them in order.</p></div>
     <div id="level-list"></div>
   </div>
 
+  <!-- LEVEL (unit list) -->
   <div class="screen" id="screen-level">
     <div class="hero" id="level-hero"></div>
     <div id="unit-list"></div>
   </div>
 
+  <!-- UNIT HUB -->
   <div class="screen" id="screen-unit">
     <div class="hero" id="unit-hero"></div>
-    <div class="ph-tabs" id="ph-tabs"></div>
-    <div id="ph-body"></div>
-    <div class="review-note">Original content built from my own material — still worth a second pair of eyes.</div>
+    <div id="unit-modes"></div>
+    <div class="review-note">Original content built from my own material — worth a native-speaker check.</div>
   </div>
 
+  <!-- FLASHCARDS -->
+  <div class="screen" id="screen-flash">
+    <div class="hero" style="padding-bottom:.6rem"><h2 id="fc-title">Flashcards</h2></div>
+    <div class="dir-toggle">
+      <button class="dir-opt active" id="dir-produce" onclick="setDir('produce')">Meaning &#8594; word</button>
+      <button class="dir-opt" id="dir-recognise" onclick="setDir('recognise')">Word &#8594; meaning</button>
+    </div>
+    <div class="fc-sectionbar" id="fc-sectionbar"></div>
+    <div class="fc-stage"><div class="fc-card" id="fc-card" onclick="flipCard()">
+      <div class="fc-face fc-front"><div class="fc-status" id="fc-status-f"></div><div id="fc-front"></div><div class="fc-tap" id="fc-tap">recall, then tap to check</div></div>
+      <div class="fc-face fc-back"><div class="fc-status" id="fc-status-b"></div><div id="fc-back"></div><div class="fc-hook" id="fc-hook"></div></div>
+    </div></div>
+    <textarea class="hook-edit" id="hook-edit" rows="2" placeholder="✎ Add your own memory hook…" onchange="saveHook()" onclick="event.stopPropagation()"></textarea>
+    <div class="fc-controls"><button class="fc-btn" onclick="rateCard('learning')">Still learning</button><button class="fc-btn known" onclick="rateCard('known')">Got it ✓</button></div>
+    <div class="fc-nav"><button onclick="prevCard()">&#8249; Prev</button><span id="fc-counter"></span><button onclick="nextCard()">Next &#8250;</button></div>
+    <div class="fc-progtext" id="fc-progtext"></div>
+  </div>
+
+  <!-- MATCH -->
+  <div class="screen" id="screen-match">
+    <div class="hero" style="padding-bottom:.6rem"><h2>Match</h2><p>Pair each word with its meaning, against the clock.</p></div>
+    <div class="game-card">
+      <div class="game-head"><span>Time <b id="match-time">0.0s</b></span><span>Best <b id="match-best">—</b></span></div>
+      <div class="match-grid" id="match-grid"></div>
+      <div class="game-done" id="match-done" style="display:none">
+        <div class="game-big" id="match-result"></div>
+        <div style="margin-top:1rem;display:flex;gap:.6rem;justify-content:center">
+          <button class="pn-btn" onclick="startMatch()">Again &#8635;</button>
+          <button class="pn-btn primary" onclick="openUnit(activeUnit)">Done &#8250;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPEED -->
+  <div class="screen" id="screen-speed">
+    <div class="hero" style="padding-bottom:.6rem"><h2>Speed</h2><p>Tap the right meaning. Keep the streak alive.</p></div>
+    <div class="game-card">
+      <div class="game-head"><span>Q <b id="sp-qnum">1</b>/<span id="sp-tot">10</span></span><span>Streak <b id="sp-streak">0</b></span><span>Best <b id="sp-best">—</b></span></div>
+      <div class="sp-word" id="sp-word"></div>
+      <div class="sp-options" id="sp-options"></div>
+      <div class="game-done" id="sp-done" style="display:none">
+        <div class="game-big" id="sp-result"></div>
+        <div style="margin-top:1rem;display:flex;gap:.6rem;justify-content:center">
+          <button class="pn-btn" onclick="startSpeed()">Again &#8635;</button>
+          <button class="pn-btn primary" onclick="openUnit(activeUnit)">Done &#8250;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE (dialogue/grammar/quiz share this screen) -->
+  <div class="screen" id="screen-phase">
+    <div class="hero" id="phase-hero" style="padding-bottom:.6rem"></div>
+    <div id="phase-body"></div>
+  </div>
+
+  <!-- BUILD LAB — START (screen) -->
+  <div class="screen" id="screen-buildlab">
+    <div class="hero"><span class="badge">Build lab</span><h2>Build Lab</h2><p>You get the root and the meaning — build the rest piece by piece.</p></div>
+    <div class="cl-intro"><strong>Build it a piece at a time.</strong> The root is given. Tap each ending in order; every ending carries a one-line hook. Tap a placed piece to remove it.</div>
+    <div class="clb-head"><div class="clb-score">Word <b id="clb-score">0</b> / <span id="clb-tot">0</span></div><div class="clb-track"><i id="clb-prog"></i></div></div>
+    <div id="clb-body"></div>
+    <div class="review-note">Sample data is a placeholder (English inflection) to show the mechanic — replace BUILDPOOL with checked forms.</div>
+  </div>
+  <!-- BUILD LAB — END (screen) -->
+
+  <!-- BACKUP -->
   <div class="screen" id="screen-backup">
-    <div class="hero"><h2>Progress</h2><p>Progress saves on this device. Copy the code below to move it elsewhere, or paste a code to restore.</p></div>
+    <div class="hero"><h2>Progress</h2><p>Progress saves on this device. Copy the code to move it; paste to restore.</p></div>
     <div class="card"><textarea class="io" id="io-box" spellcheck="false"></textarea>
       <div style="display:flex;gap:.6rem;margin-top:.8rem">
         <button class="pn-btn" onclick="ioCopy()">Copy code</button>
@@ -172,202 +314,310 @@
 </div>
 <div class="toast" id="toast"></div>
 <script>
-/* ============ engine (generic — you shouldn't need to touch this) ============ */
+/* ============ engine (generic — leave this alone) ============ */
 const mem={};
 const store={
   get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return mem[k]||null}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){mem[k]=v}}
 };
-const PKEY='study_app_v1';
-let P=store.get(PKEY)||{};
-function saveP(){store.set(PKEY,P)}
-const titles={home:'',levels:'Levels',level:'',unit:'',backup:'Progress'};
-const backMap={levels:'home',level:'levels',unit:'level',backup:'home'};
-let cur='home', curLevel=null, curUnit=null;
+const SKEY='study_app_v3';
+let S=store.get(SKEY)||{status:{},hooks:{},best:{},dir:'produce'};
+S.status=S.status||{};S.hooks=S.hooks||{};S.best=S.best||{};S.dir=S.dir||'produce';
+function saveS(){store.set(SKEY,S)}
+function cardKey(u,v){return u+'|'+v.t}
+
+let cur='home',curLevel=null,activeUnit=null;
+const titles={home:'',levels:'Levels',level:'',unit:'',flash:'Flashcards',match:'Match',speed:'Speed',phase:'',buildlab:'Build Lab',backup:'Progress'};
+const backMap={levels:'home',level:'levels',unit:'level',flash:'unit',match:'unit',speed:'unit',phase:'unit',buildlab:'home',backup:'home'};
+function unitObj(id){for(const l of LEVELS){const u=l.units.find(x=>x.id===id);if(u)return u}return null}
 function nav(s){
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
   document.getElementById('screen-'+s).classList.add('active');
   cur=s;
   const top=document.getElementById('topbar');
-  if(s==='home'){top.classList.remove('has-back')}else{top.classList.add('has-back')}
-  const backTo=backMap[s];
-  document.getElementById('back-label').textContent = backTo==='home'?'Menu':(backTo==='levels'?'Levels':(backTo==='level'?(curLevel?curLevel.name:'Level'):'Back'));
-  document.getElementById('crumb').textContent = s==='level'&&curLevel?curLevel.name:(s==='unit'&&curUnit?curLevel.name+' \u00b7 '+curUnit.num:titles[s]||'');
+  s==='home'?top.classList.remove('has-back'):top.classList.add('has-back');
+  const b=backMap[s];
+  document.getElementById('back-label').textContent=b==='home'?'Menu':(b==='levels'?'Levels':(b==='level'?(curLevel?curLevel.name:'Level'):(b==='unit'?'Unit':'Back')));
+  const u=activeUnit?unitObj(activeUnit):null;
+  document.getElementById('crumb').textContent=s==='level'&&curLevel?curLevel.name:((['unit','flash','match','speed','phase'].includes(s))&&u?u.t:(titles[s]||''));
   if(s==='home')homeProg();
   if(s==='levels')renderLevels();
   if(s==='backup')ioFill();
   window.scrollTo({top:0});
 }
-function goBack(){const b=backMap[cur];if(!b)return;if(b==='level'&&curLevel)return openLevel(curLevel.id);nav(b)}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800)}
-function unitDone(u){const p=P[u.id]||{};return p.d&&p.v&&p.g&&(p.q!=null)}
-function unitParts(u){const p=P[u.id]||{};return ['d','v','g'].filter(k=>p[k]).length+(p.q!=null?1:0)}
-function levelPct(lv){const t=lv.units.length*4;let n=0;lv.units.forEach(u=>n+=unitParts(u));return Math.round(n/t*100)}
+function goBack(){const b=backMap[cur];if(!b)return;if(b==='level'&&curLevel)return openLevel(curLevel.id);if(b==='unit'&&activeUnit)return openUnit(activeUnit);nav(b)}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1700)}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+/* progress = share of a unit's vocab marked "known" */
+function unitKnown(u){if(!u.vocab||!u.vocab.length)return 0;let n=0;u.vocab.forEach(v=>{if(S.status[cardKey(u.id,v)]==='known')n++});return n/u.vocab.length}
+function unitDone(u){return unitKnown(u)>=0.999}
+function levelPct(l){if(!l.units.length)return 0;let s=0;l.units.forEach(u=>s+=unitKnown(u));return Math.round(s/l.units.length*100)}
 function homeProg(){
   const done=LEVELS.reduce((a,l)=>a+l.units.filter(unitDone).length,0);
   const tot=LEVELS.reduce((a,l)=>a+l.units.length,0);
-  document.getElementById('home-prog').textContent=done?done+' of '+tot+' units complete':tot+' units total';
+  document.getElementById('home-prog').textContent=done?done+' of '+tot+' units mastered':tot+' units';
 }
 function renderLevels(){
-  const el=document.getElementById('level-list');
-  el.innerHTML=LEVELS.map(lv=>{
-    const pct=levelPct(lv);
-    return `<button class="card tap-card lv-card" onclick="openLevel('${lv.id}')">
-      <div class="lv-tag" style="background:var(--c-${lv.id}-bg,var(--c-l1-bg));color:var(--c-${lv.id},var(--c-l1))">${lv.name}</div>
-      <div class="lv-body"><h3>${lv.title}</h3><p>${lv.desc}</p>
-      <div class="prog"><i style="width:${pct}%"></i></div><div class="lv-pct">${pct}% \u00b7 ${lv.units.length} units</div></div></button>`;
+  document.getElementById('level-list').innerHTML=LEVELS.map(l=>{
+    const p=levelPct(l);
+    return `<button class="card tap-card lv-card" onclick="openLevel('${l.id}')">
+      <div class="lv-tag" style="background:var(--c-${l.id}-bg,var(--c-l1-bg));color:var(--c-${l.id},var(--c-l1))">${l.name}</div>
+      <div class="lv-body"><h3>${l.title}</h3><p>${l.desc}</p><div class="prog"><i style="width:${p}%"></i></div><div class="lv-pct">${p}% mastered \u00b7 ${l.units.length} units</div></div></button>`;
   }).join('');
 }
 function openLevel(id){
   curLevel=LEVELS.find(l=>l.id===id);
   document.getElementById('level-hero').innerHTML=`<span class="badge">${curLevel.name}</span><h2>${curLevel.title}</h2><p>${curLevel.desc}</p>`;
   document.getElementById('unit-list').innerHTML=curLevel.units.map((u,i)=>{
-    const parts=unitParts(u);
-    const tag=unitDone(u)?'<span class="u-done">Done \u2713</span>':(parts?`<span class="u-todo">${parts}/4</span>`:'<span class="u-todo">&#8250;</span>');
-    return `<button class="card tap-card u-card" onclick="openUnit('${u.id}')">
-      <span class="u-num">${String(i+1).padStart(2,'0')}</span>
-      <div class="u-body"><h3>${u.t}</h3><p>${u.sub}</p></div>${tag}</button>`;
+    const pct=Math.round(unitKnown(u)*100);
+    const tag=unitDone(u)?'<span class="u-done">Mastered \u2713</span>':(pct?`<span class="u-todo">${pct}%</span>`:'<span class="u-todo">&#8250;</span>');
+    return `<button class="card tap-card u-card" onclick="openUnit('${u.id}')"><span class="u-num">${String(i+1).padStart(2,'0')}</span><div class="u-body"><h3>${u.t}</h3><p>${u.sub||''}</p></div>${tag}</button>`;
   }).join('');
   nav('level');
 }
 function openUnit(id){
-  for(const lv of LEVELS){const u=lv.units.find(x=>x.id===id);if(u){curLevel=lv;curUnit=u;break}}
-  curUnit.num='Unit '+(curLevel.units.indexOf(curUnit)+1);
-  document.getElementById('unit-hero').innerHTML=`<span class="badge">${curLevel.name} \u00b7 ${curUnit.num}</span><h2>${curUnit.t}</h2><p>${curUnit.sub}</p>`;
-  renderTabs('d');
+  activeUnit=id;const u=unitObj(id);
+  for(const l of LEVELS){if(l.units.includes(u)){curLevel=l;break}}
+  document.getElementById('unit-hero').innerHTML=`<span class="badge">${curLevel.name} \u00b7 Unit ${curLevel.units.indexOf(u)+1}</span><h2>${u.t}</h2><p>${u.sub||''}</p>`;
+  const modes=[];
+  if(u.vocab&&u.vocab.length){
+    const pct=Math.round(unitKnown(u)*100);
+    modes.push(['openFlash','Flashcards','&#9634;','var(--c-l1-bg)','var(--c-l1)',`Flip cards with your own memory hooks. ${pct}% marked \u201cgot it\u201d.`]);
+    if(u.vocab.length>=3)modes.push(['startMatch','Match','&#8646;','var(--c-l2-bg)','var(--c-l2)','Pair words to meanings against the clock.']);
+    if(u.vocab.length>=4)modes.push(['startSpeed','Speed','&#9889;','var(--c-l4-bg)','var(--c-l4)','Timed recall with a streak counter.']);
+  }
+  if(u.d&&u.d.length)modes.push(['openDialogue','Dialogue','&#8220;','var(--c-l3-bg)','var(--c-l3)','A short conversation, tap to reveal the English.']);
+  if(u.g&&u.g.length)modes.push(['openGrammar','Grammar','&#167;','var(--c-lab-bg)','var(--c-lab)','The rules behind this unit, with tables and examples.']);
+  if(u.q&&u.q.length)modes.push(['openQuiz','Quiz','?','var(--c-l2-bg)','var(--c-l2)','Five questions to check it stuck.']);
+  document.getElementById('unit-modes').innerHTML=modes.map(m=>`<button class="card tap-card mode-card" onclick="${m[0]}('${id}')"><div class="mode-icon" style="background:${m[3]};color:${m[4]}">${m[2]}</div><div class="mc-body"><h3>${m[1]}</h3><p>${m[5]}</p></div></button>`).join('');
   nav('unit');
 }
-const PHASES=[['d','Dialogue'],['v','Vocabulary'],['g','Grammar'],['q','Quiz']];
-function renderTabs(active){
-  const p=P[curUnit.id]||{};
-  document.getElementById('ph-tabs').innerHTML=PHASES.map(([k,n])=>{
-    const done=k==='q'?(p.q!=null):p[k];
-    return `<button class="ph-tab${k===active?' on':''}" onclick="renderTabs('${k}')">${n}${done?'<span class="tick">\u2713</span>':''}</button>`;
-  }).join('');
-  renderPhase(active);
+/* ============ Flashcards (the memorisation core) ============ */
+let fcList=[],fcIndex=0,fcSection=null;
+function openFlash(id){
+  activeUnit=id;const u=unitObj(id);
+  document.getElementById('fc-title').textContent=u.t;
+  document.getElementById('dir-produce').classList.toggle('active',S.dir==='produce');
+  document.getElementById('dir-recognise').classList.toggle('active',S.dir!=='produce');
+  const secs=[...new Set(u.vocab.map(v=>v.sec).filter(Boolean))];
+  fcSection=secs.length?(secs.includes(fcSection)?fcSection:secs[0]):null;
+  fcIndex=0;renderFlash();nav('flash');
 }
-function markDone(k){P[curUnit.id]=P[curUnit.id]||{};if(!P[curUnit.id][k]){P[curUnit.id][k]=1;saveP();}}
-function renderPhase(k){
-  const b=document.getElementById('ph-body');
-  if(k==='d'){
-    b.innerHTML=`<div class="dlg-tools"><button class="pn-btn small" onclick="dlgAll(1)">Show all English</button><button class="pn-btn small" onclick="dlgAll(0)">Hide all</button></div>`
-      +curUnit.d.map(l=>`<button class="dlg-line" onclick="this.classList.toggle('open')"><span class="dlg-s">${l[0]}</span><div class="dlg-bq">${l[1]}</div><div class="dlg-en">${l[2]}</div></button>`).join('')
-      +`<div style="text-align:center;margin-top:1rem"><button class="pn-btn primary" onclick="markDone('d');renderTabs('v')">Done \u2014 vocabulary \u203a</button></div>`;
-  }
-  if(k==='v'){
-    b.innerHTML=curUnit.v.map(w=>`<button class="vb-row" onclick="this.classList.toggle('open')"><span class="vb-bq">${w[0]}</span><span class="vb-en">${w[1]}</span></button>`).join('')
-      +`<div style="text-align:center;margin-top:1rem"><button class="pn-btn primary" onclick="markDone('v');renderTabs('g')">Done \u2014 grammar \u203a</button></div>`;
-  }
-  if(k==='g'){
-    b.innerHTML=curUnit.g.map(c=>{
-      let h=`<div class="g-card"><h4>${c.t}</h4>`;
-      if(c.p)h+=`<p>${c.p}</p>`;
-      if(c.tb){h+='<table class="g-tb">';c.tb.forEach((r,i)=>{h+='<tr>'+r.map(x=>i===0?`<th>${x}</th>`:`<td>${x}</td>`).join('')+'</tr>'});h+='</table>'}
-      if(c.p2)h+=`<p>${c.p2}</p>`;
-      if(c.ex)c.ex.forEach(e=>h+=`<div class="g-ex"><span class="bq">${e[0]}</span><span class="en">${e[1]}</span></div>`);
-      return h+'</div>';
-    }).join('')
-    +`<div style="text-align:center;margin-top:1rem"><button class="pn-btn primary" onclick="markDone('g');renderTabs('q')">Got it \u2014 quiz me \u203a</button></div>`;
-  }
-  if(k==='q')qStart();
+function renderSectionBar(){
+  const u=unitObj(activeUnit);
+  const secs=[...new Set(u.vocab.map(v=>v.sec).filter(Boolean))];
+  const bar=document.getElementById('fc-sectionbar');
+  if(secs.length<=1){bar.innerHTML='';return}
+  bar.innerHTML=secs.map(s=>`<button class="sec-chip${s===fcSection?' on':''}" onclick="pickSection('${s.replace(/'/g,"\\'")}')">${s}</button>`).join('');
+}
+function pickSection(s){fcSection=s;fcIndex=0;renderFlash()}
+function currentList(){const u=unitObj(activeUnit);return fcSection?u.vocab.filter(v=>v.sec===fcSection):u.vocab}
+function renderFlash(){
+  renderSectionBar();
+  fcList=currentList();
+  if(fcIndex>=fcList.length)fcIndex=0;
+  const card=document.getElementById('fc-card');card.classList.remove('flipped');
+  const v=fcList[fcIndex];if(!v)return;
+  const front=document.getElementById('fc-front'),back=document.getElementById('fc-back');
+  if(S.dir==='produce'){front.className='fc-en';front.textContent=v.g;back.className='fc-word';back.textContent=v.t;document.getElementById('fc-tap').textContent='recall the word, then tap to check';}
+  else{front.className='fc-word';front.textContent=v.t;back.className='fc-en';back.textContent=v.g;document.getElementById('fc-tap').textContent='recall the meaning, then tap to check';}
+  const uh=S.hooks[cardKey(activeUnit,v)];let h='';
+  if(v.hook)h+=`<div><span class="hook-tag tag-hook">hook</span>${v.hook}</div>`;
+  if(uh)h+=`<div style="margin-top:.5rem"><span class="hook-tag tag-mine">yours</span>${uh}</div>`;
+  if(v.note)h+=`<div class="note-tag">${v.note}</div>`;
+  document.getElementById('fc-hook').innerHTML=h;
+  document.getElementById('hook-edit').value=uh||'';
+  const st=S.status[cardKey(activeUnit,v)];
+  const sh=st==='known'?'<span class="st-known">known</span>':(st==='learning'?'<span class="st-learning">learning</span>':'');
+  document.getElementById('fc-status-f').innerHTML=sh;document.getElementById('fc-status-b').innerHTML=sh;
+  document.getElementById('fc-counter').textContent=(fcIndex+1)+' / '+fcList.length;
+  const known=fcList.filter(x=>S.status[cardKey(activeUnit,x)]==='known').length;
+  document.getElementById('fc-progtext').textContent=known+' of '+fcList.length+' marked \u201cgot it\u201d';
+}
+function flipCard(){document.getElementById('fc-card').classList.toggle('flipped')}
+function setDir(d){S.dir=d;saveS();document.getElementById('dir-produce').classList.toggle('active',d==='produce');document.getElementById('dir-recognise').classList.toggle('active',d!=='produce');renderFlash()}
+function rateCard(st){const v=fcList[fcIndex];if(!v)return;S.status[cardKey(activeUnit,v)]=st;saveS();renderFlash();setTimeout(nextCard,180)}
+function saveHook(){const v=fcList[fcIndex];if(!v)return;const val=document.getElementById('hook-edit').value.trim();if(val)S.hooks[cardKey(activeUnit,v)]=val;else delete S.hooks[cardKey(activeUnit,v)];saveS();renderFlash()}
+function nextCard(){if(fcIndex<fcList.length-1){fcIndex++;renderFlash()}else{fcIndex=0;renderFlash()}}
+function prevCard(){if(fcIndex>0){fcIndex--;renderFlash()}}
+
+/* ============ Match game ============ */
+let matchPairs=0,matchSel=null,matchStart=0,matchTimer=null;
+function startMatch(id){if(id)activeUnit=id;const u=unitObj(activeUnit);nav('match');
+  document.getElementById('match-done').style.display='none';document.getElementById('match-grid').style.display='grid';
+  const b=S.best['match|'+activeUnit];document.getElementById('match-best').textContent=b?b.toFixed(1)+'s':'—';
+  const pool=shuffle(u.vocab).slice(0,Math.min(5,u.vocab.length));matchPairs=pool.length;matchSel=null;
+  let items=[];pool.forEach(v=>{items.push({k:v.t,txt:v.t,eu:1});items.push({k:v.t,txt:v.g,eu:0})});
+  items=shuffle(items);const grid=document.getElementById('match-grid');grid.innerHTML='';
+  items.forEach(it=>{const t=document.createElement('div');t.className='match-tile'+(it.eu?' eu':'');t.textContent=it.txt;t.dataset.k=it.k;t.onclick=()=>matchTap(t);grid.appendChild(t)});
+  matchStart=Date.now();clearInterval(matchTimer);matchTimer=setInterval(()=>{document.getElementById('match-time').textContent=((Date.now()-matchStart)/1000).toFixed(1)+'s'},100);
+}
+function matchTap(t){if(t.classList.contains('done'))return;
+  if(!matchSel){matchSel=t;t.classList.add('sel');return}
+  if(matchSel===t){t.classList.remove('sel');matchSel=null;return}
+  if(matchSel.dataset.k===t.dataset.k){matchSel.classList.add('done');t.classList.add('done');matchSel.classList.remove('sel');matchSel=null;matchPairs--;if(matchPairs===0)finishMatch()}
+  else{const a=matchSel;t.classList.add('wrong');a.classList.add('wrong');setTimeout(()=>{t.classList.remove('wrong');a.classList.remove('wrong','sel')},400);matchSel=null}
+}
+function finishMatch(){clearInterval(matchTimer);const secs=(Date.now()-matchStart)/1000;let best=false;
+  if(S.best['match|'+activeUnit]==null||secs<S.best['match|'+activeUnit]){S.best['match|'+activeUnit]=secs;saveS();best=true}
+  document.getElementById('match-grid').style.display='none';document.getElementById('match-done').style.display='block';
+  document.getElementById('match-result').textContent=(best?'New best! ':'Done! ')+secs.toFixed(1)+'s';
+}
+
+/* ============ Speed game ============ */
+let spQueue=[],spIdx=0,spStreak=0,spScore=0;
+function startSpeed(id){if(id)activeUnit=id;const u=unitObj(activeUnit);nav('speed');
+  document.getElementById('sp-done').style.display='none';document.getElementById('sp-options').style.display='grid';document.getElementById('sp-word').style.display='block';
+  const b=S.best['speed|'+activeUnit];document.getElementById('sp-best').textContent=b!=null?b:'—';
+  spQueue=shuffle(u.vocab).slice(0,Math.min(10,u.vocab.length));document.getElementById('sp-tot').textContent=spQueue.length;
+  spIdx=0;spStreak=0;spScore=0;document.getElementById('sp-streak').textContent='0';showSpeedQ();
+}
+function showSpeedQ(){if(spIdx>=spQueue.length)return finishSpeed();const u=unitObj(activeUnit);const v=spQueue[spIdx];
+  document.getElementById('sp-qnum').textContent=spIdx+1;document.getElementById('sp-word').textContent=v.t;
+  const others=shuffle(u.vocab.filter(x=>x.g!==v.g)).slice(0,3).map(x=>x.g);
+  const all=shuffle([v.g,...others]);const box=document.getElementById('sp-options');box.innerHTML='';
+  all.forEach(o=>{const b=document.createElement('button');b.className='sp-opt';b.textContent=o;b.onclick=()=>speedAnswer(b,o===v.g,box,v.g);box.appendChild(b)});
+}
+function speedAnswer(btn,correct,box,right){box.querySelectorAll('.sp-opt').forEach(b=>{b.style.pointerEvents='none';if(b.textContent===right)b.classList.add('correct')});
+  if(correct){spScore++;spStreak++}else{btn.classList.add('wrong');spStreak=0}
+  document.getElementById('sp-streak').textContent=spStreak;spIdx++;setTimeout(showSpeedQ,650);
+}
+function finishSpeed(){const b=S.best['speed|'+activeUnit];let best=false;if(b==null||spScore>b){S.best['speed|'+activeUnit]=spScore;saveS();best=true}
+  document.getElementById('sp-word').style.display='none';document.getElementById('sp-options').style.display='none';
+  document.getElementById('sp-done').style.display='block';
+  document.getElementById('sp-result').textContent=(best?'New best! ':'')+spScore+'/'+spQueue.length;
+}
+/* ============ Dialogue / Grammar / Quiz (share the phase screen) ============ */
+function phaseHero(t,sub){document.getElementById('phase-hero').innerHTML=`<h2>${t}</h2>${sub?`<p>${sub}</p>`:''}`}
+function openDialogue(id){if(id)activeUnit=id;const u=unitObj(activeUnit);phaseHero('Dialogue',u.t);
+  document.getElementById('phase-body').innerHTML=`<div class="dlg-tools"><button class="pn-btn small" onclick="dlgAll(1)">Show all English</button><button class="pn-btn small" onclick="dlgAll(0)">Hide all</button></div>`
+    +u.d.map(l=>`<button class="dlg-line" onclick="this.classList.toggle('open')"><span class="dlg-s">${l[0]}</span><div class="dlg-bq">${l[1]}</div><div class="dlg-en">${l[2]}</div></button>`).join('')
+    +`<div style="text-align:center;margin-top:1rem"><button class="pn-btn primary" onclick="openUnit(activeUnit)">Done &#8250;</button></div>`;
+  nav('phase');
 }
 function dlgAll(on){document.querySelectorAll('.dlg-line').forEach(l=>l.classList.toggle('open',!!on))}
+function openGrammar(id){if(id)activeUnit=id;const u=unitObj(activeUnit);phaseHero('Grammar',u.t);
+  document.getElementById('phase-body').innerHTML=u.g.map(c=>{
+    let h=`<div class="g-card"><h4>${c.t}</h4>`;
+    if(c.p)h+=`<p>${c.p}</p>`;
+    if(c.tb){h+='<table class="g-tb">';c.tb.forEach((r,i)=>{h+='<tr>'+r.map(x=>i===0?`<th>${x}</th>`:`<td>${x}</td>`).join('')+'</tr>'});h+='</table>'}
+    if(c.p2)h+=`<p>${c.p2}</p>`;
+    if(c.ex)c.ex.forEach(e=>h+=`<div class="g-ex"><span class="bq">${e[0]}</span><span class="en">${e[1]}</span></div>`);
+    return h+'</div>';
+  }).join('')+`<div style="text-align:center;margin-top:1rem"><button class="pn-btn primary" onclick="openUnit(activeUnit)">Done &#8250;</button></div>`;
+  nav('phase');
+}
 let qI=0,qS=0,qOrder=[];
-function qShuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function qStart(){qI=0;qS=0;qOrder=qShuffle(curUnit.q);qRender()}
+function openQuiz(id){if(id)activeUnit=id;phaseHero('Quiz',unitObj(activeUnit).t);qI=0;qS=0;qOrder=shuffle(unitObj(activeUnit).q);qRender();nav('phase')}
 function qRender(){
-  const b=document.getElementById('ph-body');
+  const b=document.getElementById('phase-body');
   if(qI>=qOrder.length){
-    const best=(P[curUnit.id]||{}).q;
-    P[curUnit.id]=P[curUnit.id]||{};
-    if(best==null||qS>best){P[curUnit.id].q=qS;saveP()}
-    const idx=curLevel.units.indexOf(curUnit);const next=curLevel.units[idx+1];
     b.innerHTML=`<div class="qz-card"><div class="qz-big">${qS}/${qOrder.length}</div>
       <div style="display:flex;gap:.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
-      <button class="pn-btn" onclick="qStart()">Retry quiz \u21bb</button>
-      ${next?`<button class="pn-btn primary" onclick="openUnit('${next.id}')">Next unit \u203a</button>`:`<button class="pn-btn primary" onclick="openLevel('${curLevel.id}')">Back to ${curLevel.name} \u203a</button>`}
-      </div></div>`;
-    renderTabsSilent();return;
+      <button class="pn-btn" onclick="openQuiz()">Retry &#8635;</button>
+      <button class="pn-btn primary" onclick="openUnit(activeUnit)">Done &#8250;</button></div></div>`;return;
   }
-  const it=qOrder[qI];
-  const opts=qShuffle(it[1].map((o,i)=>({o,ok:i===it[2]})));
-  b.innerHTML=`<div class="qz-card"><div class="qz-score">${qI+1} / ${qOrder.length}</div>
-    <div class="qz-kick">Choose the right answer</div><div class="qz-q">${it[0]}</div>
-    <div class="qz-opts">${opts.map((x,i)=>`<button class="qz-opt" data-ok="${x.ok?1:0}">${x.o}</button>`).join('')}</div>
-    <div class="qz-why" id="qz-why" hidden></div>
-    <div id="qz-next" style="margin-top:1rem" hidden><button class="pn-btn primary">Next \u203a</button></div></div>`;
+  const it=qOrder[qI];const opts=shuffle(it[1].map((o,i)=>({o,ok:i===it[2]})));
+  b.innerHTML=`<div class="qz-card"><div class="qz-score">${qI+1} / ${qOrder.length}</div><div class="qz-kick">Choose the right answer</div><div class="qz-q">${it[0]}</div>
+    <div class="qz-opts">${opts.map(x=>`<button class="qz-opt" data-ok="${x.ok?1:0}">${x.o}</button>`).join('')}</div>
+    <div class="qz-why" id="qz-why" hidden></div><div id="qz-next" style="margin-top:1rem" hidden><button class="pn-btn primary">Next &#8250;</button></div></div>`;
   let answered=false;
   document.querySelectorAll('.qz-opt').forEach(btn=>{btn.onclick=()=>{
-    if(answered){return}
-    if(btn.dataset.ok==='1'){
-      answered=true;btn.classList.add('good');qS++;
-      document.querySelectorAll('.qz-opt').forEach(x=>x.disabled=true);
+    if(answered)return;
+    if(btn.dataset.ok==='1'){answered=true;btn.classList.add('good');qS++;document.querySelectorAll('.qz-opt').forEach(x=>x.disabled=true);
       const w=document.getElementById('qz-why');w.textContent=it[3];w.hidden=false;
-      const n=document.getElementById('qz-next');n.hidden=false;n.querySelector('button').onclick=()=>{qI++;qRender()};
-    }else{
-      btn.classList.add('bad');btn.disabled=true;
-      setTimeout(()=>btn.classList.remove('bad'),330);
-    }
+      const n=document.getElementById('qz-next');n.hidden=false;n.querySelector('button').onclick=()=>{qI++;qRender()};}
+    else{btn.classList.add('bad');btn.disabled=true;setTimeout(()=>btn.classList.remove('bad'),330)}
   }});
 }
-function renderTabsSilent(){
-  const p=P[curUnit.id]||{};
-  document.getElementById('ph-tabs').innerHTML=PHASES.map(([k,n])=>{
-    const done=k==='q'?(p.q!=null):p[k];
-    return `<button class="ph-tab${k==='q'?' on':''}" onclick="renderTabs('${k}')">${n}${done?'<span class="tick">\u2713</span>':''}</button>`;
-  }).join('');
-}
-function ioFill(){document.getElementById('io-box').value=JSON.stringify(P)}
+
+/* ============ backup + flashcard hero ============ */
+function ioFill(){document.getElementById('io-box').value=JSON.stringify(S)}
 function ioCopy(){const b=document.getElementById('io-box');b.select();try{document.execCommand('copy');toast('Copied')}catch(e){toast('Select and copy manually')}}
-function ioLoad(){try{const v=JSON.parse(document.getElementById('io-box').value);if(typeof v==='object'&&v){P=v;saveP();toast('Progress loaded');homeProg()}else{toast('Not a valid code')}}catch(e){toast('Not a valid code')}}
+function ioLoad(){try{const v=JSON.parse(document.getElementById('io-box').value);if(v&&typeof v==='object'){S=v;S.status=S.status||{};S.hooks=S.hooks||{};S.best=S.best||{};S.dir=S.dir||'produce';saveS();toast('Progress loaded');homeProg()}else toast('Not a valid code')}catch(e){toast('Not a valid code')}}
+let flashPool=[],flI=0;
+function flashInit(){const u=LEVELS[0]&&LEVELS[0].units[0];flashPool=(u&&u.vocab&&u.vocab.length)?u.vocab:[{t:'word',g:'meaning'}];flashShow();
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches&&flashPool.length>1)setInterval(flashCycle,4200)}
+function flashShow(){const v=flashPool[flI%flashPool.length];document.getElementById('flash').innerHTML=`<span class="fw">${v.t}</span><span class="fs">\u2014</span><span class="fg">${v.g}</span>`}
+function flashCycle(){const el=document.getElementById('flash');el.classList.add('out');setTimeout(()=>{flI++;flashShow();el.classList.remove('out')},460)}
 
 /* ============================================================
-   COURSE DATA — this is the only part you (or Claude) need to edit.
-   Everything above is generic engine code.
+   COURSE DATA — the only part you (or Claude) edit.
 
-   SCHEMA:
-   LEVELS = [
-     { id, name, title, desc, units:[
-       { id, t (unit title), sub (subtitle),
-         d: [ [speakerLabel, targetLanguageText, englishGloss], ... ],   // dialogue lines
-         v: [ [targetWord, englishGloss], ... ],                        // vocab
-         g: [ { t: cardTitle, p: explanationHtml,
-                 tb: [ [headerCells...], [rowCells...], ... ],  // optional table
-                 p2: extraParagraphHtml,                         // optional
-                 ex: [ [targetExample, englishGloss], ... ] },   // optional
-              ... ],
-         q: [ [questionText, [opt0,opt1,opt2], 0, explanationText], ... ] // ALWAYS 5 questions;
-              // correct answer must be written as index 0 — the engine shuffles at render time
-       }
-     ]}
-   ]
+   LEVELS = [ { id (l1..l4 have colours predefined; add --c-{id}/-bg in
+                :root for more), name, title, desc, units:[
+     { id, t (title), sub,
+       vocab: [ {t:'target word', g:'gloss/meaning',
+                 sec:'optional section label (groups flashcards)',
+                 hook:'optional built-in memory aid',
+                 note:'optional usage/dialect note'} ... ],   // drives Flashcards, Match, Speed
+       d: [ [speaker, targetText, gloss] ... ],   // optional Dialogue
+       g: [ {t,p,tb:[[hdr..],[row..]],p2,ex:[[target,gloss]]} ... ], // optional Grammar
+       q: [ [question,[o0,o1,o2],0,why] ... ]     // optional Quiz; correct = index 0 (engine shuffles)
+     } ] } ]
 
-   The one sample unit below (basic Spanish greetings) is SAMPLE DATA —
-   replace it with units built from your own material. Keep the exact
-   field names and array shapes.
+   A unit's hub shows only the modes it has data for. Vocab is required for
+   the memorisation modes (Flashcards always; Match needs >=3 words; Speed
+   needs >=4). "Mastery" = the share of a unit's vocab you've rated "got it".
+   The sample level below is a worked example — replace it.
    ============================================================ */
 const LEVELS=[
-{id:'l1',name:'L1',title:'Sample level — replace me',desc:'This whole level is a worked example. Delete it once you understand the shape, or leave it as a reference while you build your own.',units:[
-{id:'l1u1',t:'Basic greetings (SAMPLE)',sub:'A worked example — replace with your own material',
-d:[['A','Hola, ¿qué tal?','Hi, how are you?'],
-['B','Muy bien, gracias. ¿Y tú?','Very well, thanks. And you?'],
-['A','Bien también. Me llamo Ana.','Well too. My name is Ana.'],
-['B','Encantado, Ana. Soy Marco.','Nice to meet you, Ana. I\u2019m Marco.']],
-v:[['hola','hello'],['adiós','goodbye'],['gracias','thank you'],['por favor','please'],['¿qué tal?','how are you?'],['me llamo\u2026','my name is\u2026'],['encantado/a','nice to meet you'],['sí / no','yes / no']],
-g:[
-{t:'Ser vs estar (sample grammar card)',p:'This is where a plain-English explanation of a grammar point goes. Use <b>bold</b> for target-language forms.',
-tb:[['','ser (permanent)','estar (state/location)'],['yo','soy','estoy'],['tú','eres','estás']],
-ex:[['Soy Ana.','I am Ana. (identity \u2014 ser)'],['Estoy bien.','I am well. (state \u2014 estar)']]}],
+{id:'l1',name:'L1',title:'Sample level — replace me',desc:'A worked example showing every field. Delete once you get the shape.',units:[
+{id:'l1u1',t:'Basic greetings (SAMPLE)',sub:'A worked example — replace with your material',
+vocab:[
+{t:'hola',g:'hello',sec:'Greetings',hook:'Like the English exclamation "holla".'},
+{t:'adiós',g:'goodbye',sec:'Greetings',hook:'"A dios" — literally "to God", like the old English "goodbye" from "God be with ye".'},
+{t:'gracias',g:'thank you',sec:'Greetings'},
+{t:'por favor',g:'please',sec:'Greetings'},
+{t:'buenos días',g:'good morning',sec:'Times of day',note:'Plural in Spanish — literally "good days".'},
+{t:'buenas noches',g:'good night',sec:'Times of day'},
+{t:'sí',g:'yes',sec:'Essentials'},
+{t:'no',g:'no',sec:'Essentials'}],
+d:[['A','Hola, ¿qué tal?','Hi, how are you?'],['B','Muy bien, gracias. ¿Y tú?','Very well, thanks. And you?'],['A','Bien también. Adiós.','Well too. Goodbye.']],
+g:[{t:'Ser vs estar (sample)',p:'Where a plain-English grammar note goes. Use <b>bold</b> for target forms.',
+tb:[['','ser','estar'],['yo','soy','estoy'],['tú','eres','estás']],
+ex:[['Soy Ana.','I am Ana. (identity)'],['Estoy bien.','I am well. (state)']]}],
 q:[
-['\u201cThank you\u201d in Spanish:',['gracias','por favor','de nada'],0,'gracias = thank you. por favor = please; de nada = you\u2019re welcome.'],
-['How do you say "my name is\u2026"?',['me llamo\u2026','soy llamado\u2026','mi nombre\u2026'],0,'me llamo is the standard everyday form.'],
-['\u201cGoodbye\u201d:',['adiós','hola','sí'],0,'adiós = goodbye.'],
-['Which verb for a temporary state (\u201cI am well\u201d)?',['estar','ser','tener'],0,'estar covers state/location: estoy bien.'],
-['\u201cNice to meet you\u201d (said by a man):',['encantado','encantada','gracias'],0,'encantado agrees with the speaker\u2019s gender; a woman would say encantada.']
+['"Thank you":',['gracias','por favor','adiós'],0,'gracias = thank you.'],
+['"Good morning":',['buenos días','buenas noches','hola'],0,'buenos días — literally "good days".'],
+['"Goodbye":',['adiós','sí','gracias'],0,'adiós = goodbye.'],
+['Which means "please"?',['por favor','no','buenos días'],0,'por favor = please.'],
+['"Good night":',['buenas noches','buenos días','hola'],0,'buenas noches = good night.']
 ]}
 ]}
 ];
-homeProg();
+
+/* BUILD LAB — START (JS). Delete this whole block if unused.
+   {en, root, form, pieces:[endings in order], qw, hook, dis:[wrong chips]}.
+   root + pieces.join('') MUST equal form exactly. */
+const BUILDPOOL=[
+ {en:"more than one cat",root:"cat",form:"cats",pieces:["s"],qw:"Plural?",hook:"-s marks the plural on most English nouns.",dis:["ed","ing"]},
+ {en:"did it yesterday",root:"walk",form:"walked",pieces:["ed"],qw:"Past?",hook:"-ed marks the regular past tense.",dis:["s","ing"]},
+ {en:"doing it right now",root:"walk",form:"walking",pieces:["ing"],qw:"Ongoing?",hook:"-ing marks the continuous form.",dis:["s","ed"]},
+ {en:"did it yesterday (new verb)",root:"play",form:"played",pieces:["ed"],qw:"Past?",hook:"Same -ed, different verb — the pattern repeats.",dis:["s","ing"]},
+ {en:"doing it now (new verb)",root:"jump",form:"jumping",pieces:["ing"],qw:"Ongoing?",hook:"-ing again — once learned, the piece transfers.",dis:["s","ed"]}
+];
+let blI=0,blScore=0,blPlaced=[],blOpts=[],blTried=false;
+function openBuildLab(){blI=0;blScore=0;nav('buildlab');blLoad()}
+function blLoad(){document.getElementById('clb-tot').textContent=BUILDPOOL.length;if(blI>=BUILDPOOL.length)return blEnd();
+  const it=BUILDPOOL[blI];blPlaced=[];blTried=false;blOpts=shuffle(it.pieces.concat(it.dis)).map(p=>({p,used:false}));
+  document.getElementById('clb-score').textContent=blScore;document.getElementById('clb-prog').style.width=(blI/BUILDPOOL.length*100)+'%';blRender()}
+function blRender(){const it=BUILDPOOL[blI];
+  const wb=`<span class="clb-root">${it.root}</span>`+blPlaced.map((p,i)=>`<span class="clb-op">+</span><button class="clb-chip" onclick="blRemove(${i})" title="Tap to remove">${p}</button>`).join('')+`<span class="clb-op">+</span><span class="clb-slot">?</span>`;
+  document.getElementById('clb-body').innerHTML=`<div class="clb-card"><div class="clb-kick">Word ${blI+1} \u00b7 build it</div><div class="clb-en">\u201c${it.en}\u201d</div><div class="clb-hint">Tap the pieces in order \u00b7 tap a placed piece to remove it</div><div class="clb-wb" id="clb-wb">${wb}</div><div class="clb-opts">${blOpts.map((o,i)=>`<button class="clb-opt${o.used?' used':''}" ${o.used?'disabled':''} onclick="blPick(${i})">-${o.p}</button>`).join('')}</div><div class="clb-controls"><button class="pn-btn small" onclick="blClear()">Clear</button><button class="pn-btn primary" onclick="blCheck()">Check</button></div></div>`}
+function blPick(i){if(blOpts[i].used)return;blOpts[i].used=true;blPlaced.push(blOpts[i].p);blRender()}
+function blRemove(i){const p=blPlaced.splice(i,1)[0];const o=blOpts.find(x=>x.p===p&&x.used);if(o)o.used=false;blRender()}
+function blClear(){blPlaced=[];blOpts.forEach(o=>o.used=false);blRender()}
+function blCheck(){const it=BUILDPOOL[blI];
+  if(blPlaced.join('|')===it.pieces.join('|')){if(!blTried)blScore++;document.getElementById('clb-score').textContent=blScore;
+    document.getElementById('clb-body').innerHTML=`<div class="clb-card"><div class="clb-kick">Word ${blI+1} \u00b7 built \u2713</div><div class="clb-en">\u201c${it.en}\u201d</div><div class="clb-wb"><span class="clb-form-inline">${it.form}</span></div><div class="clb-reveal"><div class="clb-parts">${it.root} + ${it.pieces.join(' + ')}<span class="clb-qw">${it.qw}</span></div><p class="clb-hook">${it.hook}</p></div><div class="clb-controls"><button class="pn-btn primary" onclick="blI++;blLoad()">${blI+1<BUILDPOOL.length?'Next word \u203a':'Finish \u203a'}</button></div></div>`;
+    document.getElementById('clb-prog').style.width=((blI+1)/BUILDPOOL.length*100)+'%';}
+  else{blTried=true;const wb=document.getElementById('clb-wb');wb.classList.remove('wrong');void wb.offsetWidth;wb.classList.add('wrong')}}
+function blEnd(){document.getElementById('clb-prog').style.width='100%';document.getElementById('clb-body').innerHTML=`<div class="clb-card"><div class="clb-kick">Round complete</div><div class="clb-big">${blScore}/${BUILDPOOL.length}</div><div class="clb-controls"><button class="pn-btn" onclick="openBuildLab()">Again \u21bb</button><button class="pn-btn primary" onclick="nav('home')">Menu \u203a</button></div></div>`}
+/* BUILD LAB — END (JS) */
+
+flashInit();homeProg();
 </script>
 </body>
 </html>
